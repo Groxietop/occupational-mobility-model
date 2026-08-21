@@ -106,3 +106,67 @@ def load_crosswalk(path) -> pd.DataFrame:
     xwalk["census_occ_code"] = xwalk["census_occ_code"].str.strip().str.zfill(4)
     xwalk["soc6"] = xwalk["soc_code_6digit"].str.strip().str[:7]
     return xwalk[["census_occ_code", "census_title", "soc6"]]
+
+
+# SOC major groups: the first two digits of a SOC code name the broad
+# occupational family. Grouping by them is the standard way to slice the
+# universe without inventing a taxonomy.
+MAJOR_GROUP_NAMES = {
+    "11": "Management",
+    "13": "Business and Financial Operations",
+    "15": "Computer and Mathematical",
+    "17": "Architecture and Engineering",
+    "19": "Life, Physical, and Social Science",
+    "21": "Community and Social Service",
+    "23": "Legal",
+    "25": "Educational Instruction and Library",
+    "27": "Arts, Design, Entertainment, Sports, and Media",
+    "29": "Healthcare Practitioners and Technical",
+    "31": "Healthcare Support",
+    "33": "Protective Service",
+    "35": "Food Preparation and Serving",
+    "37": "Building and Grounds Cleaning and Maintenance",
+    "39": "Personal Care and Service",
+    "41": "Sales and Related",
+    "43": "Office and Administrative Support",
+    "45": "Farming, Fishing, and Forestry",
+    "47": "Construction and Extraction",
+    "49": "Installation, Maintenance, and Repair",
+    "51": "Production",
+    "53": "Transportation and Material Moving",
+}
+
+# "White collar" has no official definition. This is the common reading:
+# the professional/managerial major groups (11-29) plus sales and office
+# support (41, 43). It is a reporting convention -- state it, don't assume it.
+WHITE_COLLAR_GROUPS = {
+    "11", "13", "15", "17", "19", "21", "23", "25", "27", "29", "41", "43",
+}
+
+# The professional core, excluding sales and clerical work.
+PROFESSIONAL_GROUPS = {
+    "11", "13", "15", "17", "19", "21", "23", "25", "27", "29",
+}
+
+UNIVERSE_PRESETS = {
+    "all": None,
+    "white-collar": WHITE_COLLAR_GROUPS,
+    "professional": PROFESSIONAL_GROUPS,
+}
+
+
+def major_group(soc6: str) -> str:
+    """'15-1252' -> '15'."""
+    return str(soc6).strip()[:2]
+
+
+def filter_universe(codes, preset: str = "all") -> list[str]:
+    """Restrict a list of SOC-6 codes to a named universe preset."""
+    if preset not in UNIVERSE_PRESETS:
+        raise ValueError(
+            f"unknown universe {preset!r}; expected one of {sorted(UNIVERSE_PRESETS)}"
+        )
+    groups = UNIVERSE_PRESETS[preset]
+    if groups is None:
+        return sorted(codes)
+    return sorted(c for c in codes if major_group(c) in groups)
