@@ -117,6 +117,99 @@ observed flows, and **recall@10** — of the destinations people actually moved
 to, how many appear in the model's top ten. That last one is what a career
 tool is actually for.
 
+## Phase 2: which model, and who's trapped
+
+### Is the gravity model's structure earning its keep?
+
+Five specifications, same held-out years, same metrics. The load-bearing one
+is `flow_embedding`, which never sees an O*NET feature — if a model built
+purely from who-moved-where predicts as well as one built from occupational
+descriptors, the descriptors aren't doing the work.
+
+| Model | What it is |
+|---|---|
+| `ppml_gravity` | Phase 1. Log-linear in features, Poisson, survey-weighted target. |
+| `ppml_raw_counts` | Same spec on honest person counts (see the weighting note). |
+| `boosted_poisson` | Same features, Poisson loss, no linearity assumption. |
+| `flow_embedding` | SVD of the observed flow matrix. **No O*NET features at all.** |
+| `gravity_plus_history` | Features *and* lagged flow. A forecast, not a structural model. |
+
+```bash
+python src/run_phase2.py --universe professional
+python src/run_phase2.py --compare-universes
+```
+
+### The weighting problem
+
+CPS gives each person a survey weight of ~1,000–3,000, so multiplying counts
+by weights produces numbers that aren't counts: one surveyed mover becomes a
+"count" of 2,000. The weighted target has a variance-to-mean ratio around
+**39,000**; the underlying person counts, about **20**. Poisson assumes 1.
+
+PPML point estimates survive this — that robustness is exactly why Santos
+Silva & Tenreyro recommend it — which is why phase 1's rankings hold. Any
+standard error from it does not. `ppml_raw_counts` exists to check whether
+fitting honest counts changes the ranking; it doesn't materially.
+
+### Structural vs. forecasting models
+
+These answer different questions and shouldn't be read as competing on one
+axis:
+
+- **Features-only** (`ppml_gravity`) answers *what about two occupations makes
+  movement between them likely*. It transfers to pairs never observed, which
+  is precisely what the cold-start deployment story needs.
+- **With history** (`gravity_plus_history`, `flow_embedding`) answers *what
+  will flow next year*. Strictly better at forecasting, and useless for a pair
+  with no history.
+
+A company mapping its role catalogue onto this has no internal transition
+history on day one. It gets the features-only number, not the forecasting one.
+
+### Mobility deserts
+
+An occupation is a desert when its predicted outflow concentrates on a
+handful of destinations. Counting destinations doesn't capture that — the
+model assigns *some* probability almost everywhere. Entropy does:
+
+```
+effective_destinations = exp(H(p))
+```
+
+where `p` is the predicted destination distribution. It reads directly: an
+occupation with an effective count of 4 has four realistic ways out, however
+many pairs are technically nonzero.
+
+The quadrant that matters is **narrow options and low pay**. A well-paid
+narrow occupation is a specialty; a poorly-paid narrow one is a trap. That
+intersection is what del Rio-Chanona et al. found drives long-term
+unemployment after an automation shock.
+
+### Scoping the universe
+
+`--universe` takes `all`, `white-collar` (SOC major groups 11–29 plus 41/43),
+or `professional` (11–29 only). Definitions are in `src/soc.py` — "white
+collar" has no official definition, so it's stated rather than assumed.
+
+Measured, not assumed:
+
+| Universe | Occupations | Best recall@10 |
+|---|---|---|
+| all | 430 | 0.408 |
+| white-collar | 257 | 0.485 |
+| professional | 189 | **0.510** |
+
+Narrowing to professional occupations improves recall@10 by **25%**. It also
+removes **88%** of the mobility deserts — of the 94 low-paid, narrow-option
+occupations the full universe finds, only 11 survive a professional filter.
+They sit in Production, Office Support, Personal Care and Transportation, and
+together employ ~13.1 million people.
+
+So these are two different products. Scope to white collar for a **career
+tool**; keep the full universe for the **research finding**. `--universe`
+makes that a flag rather than a fork, and `--compare-universes` reports both
+side by side. Full numbers in [`reports/phase2_findings.md`](reports/phase2_findings.md).
+
 ## Layout
 
 ```
@@ -130,8 +223,12 @@ src/
   gravity.py       The PPML gravity model
   evaluate.py      Baselines and held-out scoring
   similarity.py    Original equal-weighted similarity (kept; now the baseline)
+  models.py        Alternative specifications for the comparison
+  deserts.py       Mobility-desert metrics
+  diagnostics.py   Collinearity checks on the learned weights
   fetch_data.py    Pull every input from its API
   run_phase1.py    Fit and report
+  run_phase2.py    Model comparison + mobility deserts
 tests/
   synthetic.py     Flow generator with a known ground truth — tests only
 ```
