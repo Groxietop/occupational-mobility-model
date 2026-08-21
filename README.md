@@ -191,10 +191,24 @@ unemployment after an automation shock.
 or `professional` (11–29 only). Definitions are in `src/soc.py` — "white
 collar" has no official definition, so it's stated rather than assumed.
 
-Scoping to white collar makes the matrix denser and the model more accurate.
-It also **removes most of the mobility deserts**, which sit overwhelmingly in
-the occupations it excludes. Use the narrow universe for a career tool; use
-the full one for the research finding. `--compare-universes` reports both.
+Measured, not assumed:
+
+| Universe | Occupations | Best recall@10 |
+|---|---|---|
+| all | 430 | 0.408 |
+| white-collar | 257 | 0.485 |
+| professional | 189 | **0.510** |
+
+Narrowing to professional occupations improves recall@10 by **25%**. It also
+removes **88%** of the mobility deserts — of the 94 low-paid, narrow-option
+occupations the full universe finds, only 11 survive a professional filter.
+They sit in Production, Office Support, Personal Care and Transportation, and
+together employ ~13.1 million people.
+
+So these are two different products. Scope to white collar for a **career
+tool**; keep the full universe for the **research finding**. `--universe`
+makes that a flag rather than a fork, and `--compare-universes` reports both
+side by side. Full numbers in [`reports/phase2_findings.md`](reports/phase2_findings.md).
 
 ## Layout
 
