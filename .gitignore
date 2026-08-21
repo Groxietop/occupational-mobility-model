@@ -27,3 +27,12 @@ data/raw/*.zip
 data/processed/domain_weights.csv
 data/processed/model_scorecard.csv
 data/processed/gravity_coefficients.csv
+
+# API keys -- never commit these
+.env
+
+# IPUMS extracts are large and re-fetchable via src/fetch_data.py
+data/raw/*.csv.gz
+data/raw/*.dat.gz
+data/raw/*.xml
+data/raw/ipums_extract.json

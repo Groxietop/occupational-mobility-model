@@ -29,16 +29,36 @@ EMPLOYED = (10, 12)
 INVALID_OCC = {0, 9999}
 
 IPUMS_COLUMNS = [
-    "YEAR", "CPSIDP", "WTFINL", "EMPSTAT", "OCC", "OCCLY", "IND", "INDLY", "WKSWORK1",
+    "YEAR", "CPSIDP", "ASECWT", "WTFINL", "EMPSTAT",
+    "OCC", "OCCLY", "IND", "INDLY", "WKSWORK1",
+    # Requested by the API extract for later phases; harmless if absent.
+    "AGE", "SEX", "EDUC", "INCWAGE",
 ]
+
+# ASEC samples must be weighted with ASECWT. WTFINL is the basic *monthly*
+# weight and is not the right weight for the March supplement -- which is
+# where OCCLY (occupation last year) lives, i.e. the entire transition
+# signal. Prefer ASECWT and fall back only if the extract predates it.
+WEIGHT_PREFERENCE = ["asecwt", "wtfinl"]
 
 
 def load_ipums(path, usecols=None) -> pd.DataFrame:
     """Read an IPUMS CPS extract, lowercase the columns, keep what we need."""
-    usecols = usecols or IPUMS_COLUMNS
-    raw = pd.read_csv(path, usecols=lambda c: c.upper() in set(usecols), low_memory=False)
+    usecols = set(usecols or IPUMS_COLUMNS)
+    raw = pd.read_csv(path, usecols=lambda c: c.upper() in usecols, low_memory=False)
     raw.columns = raw.columns.str.lower()
     return raw
+
+
+def resolve_weight(frame: pd.DataFrame) -> str:
+    """Name of the person weight column to use, preferring the ASEC weight."""
+    for candidate in WEIGHT_PREFERENCE:
+        if candidate in frame.columns:
+            return candidate
+    raise KeyError(
+        "no person weight column found; expected one of "
+        f"{WEIGHT_PREFERENCE}, got {sorted(frame.columns)}"
+    )
 
 
 def _zero_pad(series: pd.Series) -> pd.Series:
@@ -81,6 +101,9 @@ def extract_moves(raw: pd.DataFrame, crosswalk_path) -> pd.DataFrame:
     # A move at SOC-6 level. Census OCC codes are finer than SOC-6 in places,
     # so a changed OCC can still be the same SOC-6; that is not a transition.
     df["moved"] = (df["soc_from"] != df["soc_to"]).astype(int)
+    # Normalise the weight column name so downstream code never has to care
+    # which weight the extract carried.
+    df["weight"] = df[resolve_weight(df)].astype(float)
     return df
 
 
@@ -90,8 +113,8 @@ def aggregate_transitions(moves: pd.DataFrame) -> pd.DataFrame:
     agg = (
         changed.groupby(["year", "soc_from", "soc_to"], as_index=False)
         .agg(
-            weighted_count=("wtfinl", "sum"),
-            raw_count=("wtfinl", "size"),
+            weighted_count=("weight", "sum"),
+            raw_count=("weight", "size"),
             same_industry_share=("same_industry", "mean"),
         )
     )
@@ -106,9 +129,9 @@ def destination_size(moves: pd.DataFrame) -> pd.DataFrame:
     choosing among.
     """
     return (
-        moves.groupby(["year", "soc_to"], as_index=False)["wtfinl"]
+        moves.groupby(["year", "soc_to"], as_index=False)["weight"]
         .sum()
-        .rename(columns={"soc_to": "soc6", "wtfinl": "employment"})
+        .rename(columns={"soc_to": "soc6", "weight": "employment"})
     )
 
 
