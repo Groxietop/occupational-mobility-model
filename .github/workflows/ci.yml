@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+      # The synthetic path exercises the full runner without needing the
+      # IPUMS extract, so a broken pipeline fails CI rather than failing
+      # the first time someone runs it with real data.
+      - run: python src/run_phase1.py --synthetic
