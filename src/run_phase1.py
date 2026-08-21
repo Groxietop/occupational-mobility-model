@@ -28,14 +28,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from evaluate import compare  # noqa: E402
 from gravity import build_panel, fit_gravity, predict  # noqa: E402
-from pairs import build_pair_features, related_pairs  # noqa: E402
+from pairs import add_wage_features, build_pair_features, related_pairs  # noqa: E402
 from soc import collapse_to_soc6, load_crosswalk  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw"
 PROCESSED = ROOT / "data" / "processed"
 
-IPUMS_FILE = RAW / "ipums_cps_asec.csv.gz"
+# Located at run time: an API-downloaded extract (cps_00001.csv.gz) if one
+# exists, else the legacy hand-built path.
+LEGACY_IPUMS_FILE = RAW / "ipums_cps_asec.csv.gz"
 CROSSWALK = RAW / "census_occ_to_soc_2018.csv"
 MASTER = PROCESSED / "onet_master.parquet"
 
@@ -63,6 +65,11 @@ def parse_args(argv=None):
     parser.add_argument(
         "--max-iter", type=int, default=1000, help="Solver iteration cap."
     )
+    parser.add_argument(
+        "--no-wages",
+        action="store_true",
+        help="Skip the OEWS wage pull (avoids needing BLS_API_KEY).",
+    )
     return parser.parse_args(argv)
 
 
@@ -80,17 +87,24 @@ def load_observed(train_years, test_years, synthetic, pair_features):
             seed=7,
         )
 
-    if not IPUMS_FILE.exists():
+    from sources.ipums import latest_extract_file
+
+    path = latest_extract_file(RAW) or (
+        LEGACY_IPUMS_FILE if LEGACY_IPUMS_FILE.exists() else None
+    )
+    if path is None:
         raise SystemExit(
-            f"{IPUMS_FILE} not found.\n"
-            "Follow the download steps at the top of "
-            "notebooks/03_ipums_transitions.ipynb, or run with --synthetic "
-            "to exercise the pipeline without it."
+            f"No CPS extract found in {RAW}.\n"
+            "Fetch one with:\n"
+            "  python src/fetch_data.py cps --submit\n"
+            "  python src/fetch_data.py cps --download\n"
+            "or run with --synthetic to exercise the pipeline without it."
         )
 
     from transitions import aggregate_transitions, destination_size, extract_moves, load_ipums
 
-    raw = load_ipums(IPUMS_FILE)
+    print(f"  reading {path.name}")
+    raw = load_ipums(path)
     print(f"  loaded {len(raw):,} person-year records")
     moves = extract_moves(raw, CROSSWALK)
     print(f"  {len(moves):,} SOC-mapped employed person-years")
@@ -117,7 +131,25 @@ def main(argv=None) -> int:
     pair_features = build_pair_features(
         soc6_master, universe=universe, onet_related=related_pairs(master)
     )
-    print(f"  {len(pair_features):,} ordered occupation pairs\n")
+    print(f"  {len(pair_features):,} ordered occupation pairs")
+
+    if not args.no_wages:
+        try:
+            from sources.bls import fetch_oews, to_wide
+
+            oews = to_wide(
+                fetch_oews(universe, cache_path=PROCESSED / "oews.parquet")
+            )
+            pair_features = add_wage_features(pair_features, oews)
+            covered = pair_features["d_log_wage"].notna().mean()
+            print(
+                f"  OEWS {int(oews['year'].max())}: wages for "
+                f"{oews['soc6'].nunique()}/{len(universe)} occupations "
+                f"({covered:.0%} of pairs get a wage gap)"
+            )
+        except Exception as exc:  # noqa: BLE001 -- wages are enrichment, not a hard dep
+            print(f"  [warn] OEWS unavailable ({exc}); continuing without wage features")
+    print()
 
     transitions, sizes = load_observed(
         args.train_years, args.test_years, args.synthetic, pair_features

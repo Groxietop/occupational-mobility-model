@@ -5,4 +5,8 @@ scikit-learn>=1.3
 pyarrow>=12.0
 matplotlib>=3.7
 seaborn>=0.12
+
+# IPUMS CPS extracts over the API (src/sources/ipums.py)
+ipumspy>=0.5
+
 pytest>=7.0

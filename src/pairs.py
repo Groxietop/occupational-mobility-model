@@ -127,3 +127,31 @@ def build_pair_features(
 
 def similarity_columns(pairs: pd.DataFrame) -> list[str]:
     return sorted(c for c in pairs.columns if c.startswith(SIM_PREFIX))
+
+
+def add_wage_features(pairs: pd.DataFrame, oews_wide: pd.DataFrame) -> pd.DataFrame:
+    """Attach the OEWS wage gap between origin and destination.
+
+    `d_log_wage` is log(median wage at destination) - log(median wage at
+    origin): positive means the move is a raise. Logs rather than levels
+    because a $10k gap means something very different at $30k than at $200k.
+
+    OEWS suppresses estimates for occupations too small to publish, so some
+    pairs have no wage gap. Those are left as NaN here and imputed with a
+    missingness flag at model time, the same way the O*NET gaps are -- an
+    unknown wage gap is its own state, not a zero one.
+    """
+    wages = (
+        oews_wide.loc[:, ["soc6", "annual_median_wage"]]
+        .dropna()
+        .drop_duplicates("soc6")
+        .set_index("soc6")["annual_median_wage"]
+    )
+    positive = wages[wages > 0]
+    log_wage = np.log(positive)
+
+    out = pairs.copy()
+    origin = out["soc_from"].map(log_wage)
+    destination = out["soc_to"].map(log_wage)
+    out["d_log_wage"] = destination - origin
+    return out

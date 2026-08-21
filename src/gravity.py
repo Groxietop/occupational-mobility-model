@@ -45,7 +45,13 @@ from sklearn.preprocessing import StandardScaler
 from pairs import similarity_columns
 
 # Pair-level terms that aren't per-domain similarities.
-EXTRA_FEATURES = ["d_job_zone", "d_education", "same_industry", "onet_related"]
+EXTRA_FEATURES = [
+    "d_job_zone",
+    "d_education",
+    "d_log_wage",
+    "same_industry",
+    "onet_related",
+]
 
 # Occupation employment is heavily right-skewed and shows up in the gravity
 # specification in logs; this floor keeps log() finite for tiny cells.
@@ -166,12 +172,13 @@ def _design(
 def _prepare(panel: pd.DataFrame, feature_names: list[str]) -> pd.DataFrame:
     """Impute the pair terms that O*NET leaves blank, and flag that we did.
 
-    `job_zone` and `education_rank` are missing for ~10% of occupations. A
-    missingness flag lets the model treat "unknown education gap" as its own
-    state instead of silently reading it as "no gap".
+    `job_zone` and `education_rank` are missing for ~10% of occupations, and
+    OEWS suppresses wages for occupations too small to publish. A missingness
+    flag lets the model treat "unknown gap" as its own state instead of
+    silently reading it as "no gap".
     """
     out = panel.copy()
-    for col in ("d_job_zone", "d_education"):
+    for col in ("d_job_zone", "d_education", "d_log_wage"):
         if col in out.columns:
             flag = f"{col}__missing"
             if flag not in out.columns:
