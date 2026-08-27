@@ -81,6 +81,17 @@ def onet(args) -> int:
     print()
     print(f"  {freshness.describe()}")
 
+    if args.download:
+        from sources.onet import download_bulk
+
+        version = args.download
+        print(f"\nDownloading O*NET {version} bulk database (~13 MB)...")
+        where = download_bulk(version, RAW / f"onet_{version.replace('.', '_')}")
+        print(f"  unpacked to {where}")
+        print(f"  now run: python src/build_master.py --raw {where} "
+              f"--out data/processed/onet_master.parquet")
+        return 0
+
     if args.occupation:
         from sources.onet import domain_ratings, occupation as fetch_occupation
 
@@ -172,6 +183,10 @@ def parse_args(argv=None):
     )
     onet_parser.add_argument(
         "--domain", default="skill", help="Domain to show for --occupation"
+    )
+    onet_parser.add_argument(
+        "--download", default=None, metavar="VERSION",
+        help="Fetch and unpack a bulk release, e.g. --download 31.0",
     )
     onet_parser.set_defaults(func=onet)
 

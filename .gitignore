@@ -41,3 +41,8 @@ data/raw/ipums_extract.json
 data/processed/model_comparison*.csv
 data/processed/mobility_deserts*.csv
 data/processed/universe_comparison.csv
+
+# O*NET bulk dumps are ~99 MB unpacked and reproducible from a documented
+# download. `python src/fetch_data.py onet --download 31.0` fetches one;
+# build_master.py turns it into the 1.2 MB parquet the pipeline reads.
+data/raw/onet_31_0/

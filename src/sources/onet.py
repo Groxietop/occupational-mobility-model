@@ -220,3 +220,40 @@ def related_occupations(soc_code: str, api_key: str | None = None) -> list[dict]
         key="occupation",
     )
     return [{"code": e["code"], "title": e["title"]} for e in elements if "code" in e]
+
+
+# --- bulk database download ------------------------------------------------
+
+BULK_URL = "https://www.onetcenter.org/dl_files/database/db_{version}_text.zip"
+
+
+def bulk_download_url(version: str) -> str:
+    """Download URL for a bulk text release, e.g. '31.0' -> db_31_0_text.zip."""
+    return BULK_URL.format(version=version.replace(".", "_"))
+
+
+def download_bulk(version: str, target_dir, timeout: float = 300.0):
+    """Fetch and unpack an O*NET bulk text database.
+
+    ~13 MB compressed, ~99 MB unpacked, which is why the raw dump is not
+    committed for every release -- `build_master.py` turns it into a 1.2 MB
+    parquet and that is what the pipeline actually reads.
+    """
+    import io
+    import zipfile
+
+    target_dir = Path(target_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    url = bulk_download_url(version)
+
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        payload = response.read()
+
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        archive.extractall(target_dir)
+
+    unpacked = sorted(p for p in target_dir.iterdir() if p.is_dir())
+    if not unpacked:
+        raise ONetError(f"nothing unpacked from {url}")
+    return unpacked[-1]
