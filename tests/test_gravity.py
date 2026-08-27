@@ -57,8 +57,13 @@ def test_recovers_the_domain_weight_ordering(synthetic_panels):
 
     # The two domains that genuinely drive the synthetic flows must come out
     # on top of the four that carry no signal at all.
-    signal = {"skill", "knowledge"}
-    noise = {"work_style", "work_value", "interest", "work_context"}
+    # Intersect with what the current master actually carries -- O*NET
+    # retires domains between releases (31.0 dropped work values), and this
+    # test is about weight recovery, not about which domains exist.
+    available = set(weights.index)
+    signal = {"skill", "knowledge"} & available
+    noise = {"work_style", "work_value", "interest", "work_context"} & available
+    assert signal and noise
     assert weights[list(signal)].min() > weights[list(noise)].max()
     # And the strongest true driver should rank first.
     assert weights.idxmax() == "skill"

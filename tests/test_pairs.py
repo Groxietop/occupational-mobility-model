@@ -83,10 +83,26 @@ def test_onet_related_flag_lands_on_the_right_pairs():
     assert list(zip(flagged["soc_from"], flagged["soc_to"])) == [("11-1001", "11-1021")]
 
 
-def test_real_master_builds_a_full_pair_table(small_pairs, small_universe):
+def test_real_master_builds_a_full_pair_table(small_pairs, small_universe, soc6_master):
+    """Domain count is not hardcoded: O*NET retires domains between releases.
+
+    31.0 dropped work values entirely, so asserting 8 here failed on a
+    perfectly good refresh. The invariant that matters is that every domain
+    present in the master produces a similarity column.
+    """
+    from similarity import DOMAINS
+
     n = len(small_universe)
     assert len(small_pairs) == n * (n - 1)
-    assert len(similarity_columns(small_pairs)) == 8
+
+    expected = {
+        domain
+        for domain, prefix in DOMAINS.items()
+        if any(c.startswith(prefix) for c in soc6_master.columns)
+    }
+    produced = {c.replace("sim__", "") for c in similarity_columns(small_pairs)}
+    assert produced == expected
+    assert len(produced) >= 7
     sims = small_pairs[similarity_columns(small_pairs)]
     assert sims.notna().all().all()
     assert sims.to_numpy().min() >= -1.0001
