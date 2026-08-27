@@ -69,6 +69,37 @@ def fetch_oews(args) -> int:
     return 0
 
 
+def onet(args) -> int:
+    """Check whether the committed O*NET bulk database has gone stale."""
+    from sources.onet import ONetError, check_freshness
+
+    freshness = check_freshness(RAW)
+    print(f"O*NET local database:  {freshness.local_version or 'not found'}")
+    print(f"O*NET published:       {freshness.published_version or 'unknown'}")
+    if freshness.taxonomy:
+        print(f"Taxonomy:              {freshness.taxonomy}")
+    print()
+    print(f"  {freshness.describe()}")
+
+    if args.occupation:
+        from sources.onet import domain_ratings, occupation as fetch_occupation
+
+        try:
+            detail = fetch_occupation(args.occupation)
+            print(f"\n{detail['code']} — {detail['title']}")
+            ratings = domain_ratings(args.occupation, args.domain)
+            top = sorted(ratings.items(), key=lambda kv: -kv[1])[:8]
+            print(f"  top {args.domain} ratings:")
+            for name, score in top:
+                print(f"    {score:>5.1f}  {name}")
+        except ONetError as exc:
+            print(f"  [warn] {exc}")
+
+    # Stale is a finding, not a failure -- the pipeline still runs on the
+    # committed database. Exit non-zero so CI can choose to notice.
+    return 0 if freshness.is_current else 2
+
+
 def _ipums_client():
     from sources.ipums import get_client
 
@@ -132,6 +163,17 @@ def parse_args(argv=None):
         "--years", type=int, nargs="+", default=None, help="ASEC years to request."
     )
     cps_parser.set_defaults(func=cps)
+
+    onet_parser = sub.add_parser(
+        "onet", help="Check whether the committed O*NET database is current"
+    )
+    onet_parser.add_argument(
+        "--occupation", default=None, help="Also spot-check one O*NET-SOC code"
+    )
+    onet_parser.add_argument(
+        "--domain", default="skill", help="Domain to show for --occupation"
+    )
+    onet_parser.set_defaults(func=onet)
 
     return parser.parse_args(argv)
 
