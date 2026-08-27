@@ -73,7 +73,7 @@ def onet(args) -> int:
     """Check whether the committed O*NET bulk database has gone stale."""
     from sources.onet import ONetError, check_freshness
 
-    freshness = check_freshness(RAW)
+    freshness = check_freshness(RAW, master_path=PROCESSED / "onet_master.parquet")
     print(f"O*NET local database:  {freshness.local_version or 'not found'}")
     print(f"O*NET published:       {freshness.published_version or 'unknown'}")
     if freshness.taxonomy:
