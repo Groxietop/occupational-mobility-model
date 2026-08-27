@@ -146,8 +146,42 @@ def published_version(api_key: str | None = None) -> tuple[str | None, str | Non
     return (match.group(1) if match else None), taxonomy
 
 
-def local_version(raw_dir: Path | str) -> str | None:
-    """Version of the committed bulk database, read from its directory name."""
+def version_from_master(master_path: Path | str) -> str | None:
+    """Release the master was built from, as stamped by build_master.py.
+
+    This is the authoritative answer. Reading a directory name under
+    data/raw/ only tells you which bulk dump happens to be sitting on disk,
+    which is not the same thing -- and is wrong outright once the raw dump
+    stops being committed.
+    """
+    master_path = Path(master_path)
+    if not master_path.exists():
+        return None
+    try:
+        import pandas as pd
+
+        frame = pd.read_parquet(master_path, columns=["onet_version"])
+    except Exception:
+        return None
+    if frame.empty:
+        return None
+    value = frame["onet_version"].dropna()
+    return str(value.iloc[0]) if len(value) else None
+
+
+def local_version(
+    raw_dir: Path | str, master_path: Path | str | None = None
+) -> str | None:
+    """Version the pipeline is actually running on.
+
+    Prefers the stamp inside the master; falls back to a bulk directory name
+    for masters built before stamping existed.
+    """
+    if master_path is not None:
+        stamped = version_from_master(master_path)
+        if stamped:
+            return stamped
+
     raw_dir = Path(raw_dir)
     if not raw_dir.exists():
         return None
@@ -158,9 +192,13 @@ def local_version(raw_dir: Path | str) -> str | None:
     return None
 
 
-def check_freshness(raw_dir: Path | str, api_key: str | None = None) -> Freshness:
-    """Compare the committed database against what O*NET publishes today."""
-    local = local_version(raw_dir)
+def check_freshness(
+    raw_dir: Path | str,
+    api_key: str | None = None,
+    master_path: Path | str | None = None,
+) -> Freshness:
+    """Compare what the pipeline runs on against what O*NET publishes today."""
+    local = local_version(raw_dir, master_path=master_path)
     try:
         published, taxonomy = published_version(api_key=api_key)
     except ONetError:

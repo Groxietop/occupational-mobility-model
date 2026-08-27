@@ -29,6 +29,7 @@ a new one: if it cannot reproduce 30.2, it should not be believed about 31.0.
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -226,6 +227,15 @@ def _related(raw_dir: Path) -> pd.DataFrame:
     return grouped.rename(columns={SOC: "soc_code", code_col: "primary_related_soc_codes"})
 
 
+DIR_VERSION = re.compile(r"db_(\d+)_(\d+)_text")
+
+
+def source_version(raw_dir: Path | str) -> str | None:
+    """Version of a bulk directory, e.g. .../db_31_0_text -> '31.0'."""
+    match = DIR_VERSION.search(str(raw_dir))
+    return f"{match.group(1)}.{match.group(2)}" if match else None
+
+
 def build(raw_dir: Path | str) -> pd.DataFrame:
     raw_dir = Path(raw_dir)
 
@@ -250,7 +260,16 @@ def build(raw_dir: Path | str) -> pd.DataFrame:
     features.index.name = "soc_code"
 
     master = master.merge(features.reset_index(), on="soc_code", how="left")
-    return master.sort_values("soc_code").reset_index(drop=True)
+    master = master.sort_values("soc_code").reset_index(drop=True)
+
+    # Stamp the source release into the artifact. The freshness check used to
+    # infer it from a directory name in data/raw/, which breaks the moment the
+    # raw dump isn't committed -- it then reports whatever stale folder is
+    # lying around rather than what the master was actually built from.
+    master.attrs["onet_version"] = source_version(raw_dir)
+    if "onet_version" not in master.columns:
+        master.insert(1, "onet_version", source_version(raw_dir))
+    return master
 
 
 def validate(built: pd.DataFrame, existing_path: Path | str) -> dict:
