@@ -18,8 +18,9 @@ re-do by hand when a new year of data lands.
 ## Quickstart
 
 ```bash
+python3 -m venv .venv && source .venv/bin/activate   # Python 3.9+
 pip install -r requirements.txt
-cp .env.example .env        # then fill in your two API keys
+cp .env.example .env        # then fill in your API keys
 
 python src/fetch_data.py oews           # BLS employment + wages (~25s)
 python src/fetch_data.py cps --submit   # queue the IPUMS extract
@@ -34,12 +35,14 @@ python src/run_phase1.py --synthetic    # no keys needed; plumbing demo only
 
 | Source | What it gives | Access |
 |---|---|---|
-| **O*NET 30.2** | 1,016 occupations × ~440 descriptors across 8 domains | Committed (CC-BY 4.0) |
+| **O*NET 30.2** | 1,016 occupations × ~440 descriptors across 8 domains | Committed bulk download (CC-BY 4.0) |
 | **BLS OEWS** | Employment and wages per occupation | API, free key |
 | **IPUMS CPS ASEC** | Observed year-over-year occupation transitions, 2018–2024 | API, free key + CPS registration |
+| **O*NET Web Services** | Version checking and single-occupation spot lookups | API, free key |
 
-Get keys at [BLS](https://data.bls.gov/registrationEngine/) and
-[IPUMS](https://account.ipums.org/api_keys). IPUMS additionally requires a
+Get keys at [BLS](https://data.bls.gov/registrationEngine/),
+[IPUMS](https://account.ipums.org/api_keys), and
+[O*NET](https://services.onetcenter.org/developer/signup). IPUMS additionally requires a
 **per-collection registration for CPS** at
 [uma.pop.umn.edu/cps/registration/new](https://uma.pop.umn.edu/cps/registration/new) —
 the API key alone is not enough, and the error if you skip it is explicit.
@@ -57,6 +60,32 @@ characters of positional encoding; `src/sources/bls.py` documents the layout,
 and the format is locked down by tests because a malformed ID fails silently.
 Credit to [govex/bls-oews-api-tutorial](https://github.com/govex/bls-oews-api-tutorial)
 for reverse-engineering it.
+
+### Why O*NET is still a bulk download
+
+The v2 API serves the same ratings, but paginated ten elements at a time —
+one occupation's skills is four requests, and the full matrix would be
+roughly **32,000 requests** per rebuild against a single bulk download of
+identical numbers. So the feature matrix stays on the bulk file.
+
+What the API does instead is the thing a static dump can't: tell you it has
+gone stale.
+
+```bash
+python src/fetch_data.py onet
+python src/fetch_data.py onet --occupation 15-1252.00 --domain knowledge
+```
+
+```
+O*NET local database:  30.2
+O*NET published:       31.0
+
+  local O*NET database is 30.2; O*NET now publishes 31.0.
+```
+
+That is a real finding, not a worked example — the committed database is two
+releases behind, and nothing in the repo said so until this check existed.
+It exits 2 when stale so CI can choose to notice.
 
 ### A weight bug the API caught
 

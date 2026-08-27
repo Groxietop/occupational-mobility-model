@@ -1,3 +1,4 @@
+# Requires Python 3.9+ (pandas>=2.0 and ipumspy both drop 3.8).
 pandas>=2.0
 numpy>=1.24
 scipy>=1.10
