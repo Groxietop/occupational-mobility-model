@@ -78,13 +78,12 @@ O*NET's own curated related-occupation list.
 | **`learned_gravity`** | **0.262** | **0.323** |
 
 recall@10 is the share of actual destinations that appear in the model's top
-ten, out of 430. So roughly a quarter, against about 2% for a random guess —
-a real improvement, and clearly not a solved problem.
+ten, out of 430. So roughly a quarter, against about 2% for a random guess.
 
 The learned weights put skill first, then work context, interest and
 knowledge, with work activity a distant last. Equal weighting was wrong: the
 positive weights span nearly 4×. Ability comes out negative, which is
-collinearity with skill and work context rather than a real effect —
+collinearity with skill and work context rather than a real effect.
 `diagnostics.py` computes the VIFs that establish it.
 
 Phase 2 compares five specifications, including a flow-embedding baseline that
@@ -102,7 +101,7 @@ case. Numbers in [`reports/`](reports/).
 - This models flows between occupations, not any individual's probability of
   moving.
 - It learns where people *did* go, which encodes existing labour market
-  frictions. A well-travelled route isn't automatically a good one.
+  frictions.
 
 ## Tests
 
