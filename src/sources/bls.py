@@ -101,6 +101,13 @@ def fetch_oews(
     publish (too small to disclose, or not a real SOC) simply don't appear --
     that's a real gap in the data, not an error, so it isn't filled in.
     """
+    # Cache first: a cached pull needs no key, which is what lets downstream
+    # phases re-run offline.
+    if cache_path is not None:
+        cache_path = Path(cache_path)
+        if cache_path.exists():
+            return pd.read_parquet(cache_path)
+
     key = api_key or os.environ.get("BLS_API_KEY")
     if not key:
         raise RuntimeError(
@@ -108,11 +115,6 @@ def fetch_oews(
             "https://data.bls.gov/registrationEngine/ and export it, or put it "
             "in a local .env file (which is gitignored)."
         )
-
-    if cache_path is not None:
-        cache_path = Path(cache_path)
-        if cache_path.exists():
-            return pd.read_parquet(cache_path)
 
     measures = list(measures or MEASURES)
     wanted = [(code, measure) for code in soc_codes for measure in measures]
